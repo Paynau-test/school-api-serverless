@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "School API - Local",
+    "name": "School API Node - Local",
     "_postman_id": "school-api-local",
     "description": "Auto-generated from template.yaml.\nEnvironment: Local\nBase URL: http://localhost:3000\n\nFlow: 1) Login → 2) Token auto-saved → 3) Use protected endpoints.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"

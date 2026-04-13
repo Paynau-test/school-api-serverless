@@ -91,13 +91,54 @@ build:
 	@sam build
 
 deploy:
-	@sam build
-	@sam deploy --stack-name school-api-node \
+	@echo "Reading infra outputs from AWS..."
+	@VPC_ID=$$(aws cloudformation describe-stacks --stack-name SchoolNetwork --region us-east-1 \
+		--query 'Stacks[0].Outputs[?OutputKey==`VpcId`].OutputValue' --output text) && \
+	SUBNETS=$$(aws ec2 describe-subnets --region us-east-1 \
+		--filters "Name=vpc-id,Values=$$VPC_ID" "Name=tag:aws-cdk:subnet-type,Values=Private" \
+		--query 'Subnets[].SubnetId' --output text | tr '\t' ',') && \
+	DB_HOST=$$(aws cloudformation describe-stacks --stack-name SchoolDatabase --region us-east-1 \
+		--query 'Stacks[0].Outputs[?OutputKey==`DbEndpoint`].OutputValue' --output text) && \
+	DB_SECRET=$$(aws secretsmanager get-secret-value --secret-id school-db-credentials --region us-east-1 \
+		--query SecretString --output text) && \
+	DB_USER=$$(echo "$$DB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['username'])") && \
+	DB_PASS=$$(echo "$$DB_SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['password'])") && \
+	echo "VPC: $$VPC_ID" && \
+	echo "Subnets: $$SUBNETS" && \
+	echo "DB Host: $$DB_HOST" && \
+	echo "DB User: $$DB_USER" && \
+	sam build && \
+	sam deploy --stack-name school-api-node \
 		--region us-east-1 \
 		--capabilities CAPABILITY_IAM \
 		--resolve-s3 \
 		--no-confirm-changeset \
-		--tags project=school environment=dev owner=isaac
+		--tags project=school environment=dev owner=isaac \
+		--parameter-overrides \
+			VpcId=$$VPC_ID \
+			SubnetIds=$$SUBNETS \
+			DbHost=$$DB_HOST \
+			DbUser=$$DB_USER \
+			DbPassword=$$DB_PASS \
+			DbName=school_db \
+			JwtSecret=school-jwt-secret-prod-2026 \
+	|| echo "Stack already up to date."
+
+db-deploy:
+	@echo "Running database migration on production RDS..."
+	@aws lambda invoke --function-name school-db-migrate \
+		--region us-east-1 \
+		--cli-read-timeout 120 \
+		/tmp/db-migrate-response.json > /dev/null 2>&1 && \
+	RESULT=$$(cat /tmp/db-migrate-response.json) && \
+	STATUS=$$(echo "$$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('statusCode', 500))") && \
+	if [ "$$STATUS" = "200" ]; then \
+		echo "Database migrated successfully."; \
+	else \
+		echo "Migration failed:"; \
+		echo "$$RESULT" | python3 -m json.tool; \
+		exit 1; \
+	fi
 
 destroy:
 	@echo "Destroying school-api-node stack..."
@@ -159,6 +200,7 @@ help:
 	@echo "  make install        Install dependencies"
 	@echo "  make build          Build SAM project"
 	@echo "  make deploy         Build and deploy to AWS"
+	@echo "  make db-deploy      Run DB migration on production RDS"
 	@echo ""
 	@echo "  make invoke-login   Test login locally"
 	@echo "  make invoke-create  Test create-student locally"

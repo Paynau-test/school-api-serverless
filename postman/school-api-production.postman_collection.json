@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "School API - Production",
+    "name": "School API Node - Production",
     "_postman_id": "school-api-production",
     "description": "Auto-generated from template.yaml.\nEnvironment: Production\nBase URL: https://z3auyyxj3g.execute-api.us-east-1.amazonaws.com/dev\n\nFlow: 1) Login → 2) Token auto-saved → 3) Use protected endpoints.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"

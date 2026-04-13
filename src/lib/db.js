@@ -5,9 +5,6 @@ let pool = null;
 /**
  * Get or create a MySQL connection pool.
  * Lambda reuses the pool across warm invocations.
- *
- * In AWS, credentials come from Secrets Manager (via env vars set by SAM).
- * In local dev, they come from .env or docker defaults.
  */
 export function getPool() {
   if (!pool) {
@@ -17,6 +14,7 @@ export function getPool() {
       database: process.env.DB_NAME || "school_db",
       user: process.env.DB_USER || "school_user",
       password: process.env.DB_PASSWORD || "school_pass",
+      charset: "utf8mb4",
       waitForConnections: true,
       connectionLimit: 5,
       queueLimit: 0,
@@ -36,7 +34,5 @@ export async function callProcedure(spName, params = []) {
   const placeholders = params.map(() => "?").join(", ");
   const sql = `CALL ${spName}(${placeholders})`;
   const [results] = await pool.execute(sql, params);
-  // MySQL stored procedures return results as nested arrays
-  // The actual data is in results[0]
   return Array.isArray(results[0]) ? results[0] : results;
 }

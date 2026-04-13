@@ -158,7 +158,7 @@ function loginTestScript() {
 function buildCollection(envName, baseUrl, postmanId) {
   return {
     info: {
-      name: `School API - ${envName}`,
+      name: `School API Node - ${envName}`,
       _postman_id: postmanId,
       description: `Auto-generated from template.yaml.\nEnvironment: ${envName}\nBase URL: ${baseUrl}\n\nFlow: 1) Login → 2) Token auto-saved → 3) Use protected endpoints.`,
       schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",

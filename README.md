@@ -1,6 +1,6 @@
-# school-api-serverless
+# school-api-node
 
-Serverless REST API for student CRUD operations. Built with Node.js, AWS Lambda, and API Gateway using AWS SAM.
+REST API for the school management system. Built with Node.js 20, AWS Lambda, and API Gateway using AWS SAM.
 
 ## Requirements
 
@@ -13,27 +13,50 @@ Serverless REST API for student CRUD operations. Built with Node.js, AWS Lambda,
 
 ```bash
 make install    # Install dependencies
-make dev        # Start API on http://localhost:3000
+make dev        # Start API in background on http://localhost:3000
+make logs-tail  # Follow logs in real time
 ```
 
 Requires school-db Docker containers running. The API connects to your local MySQL on port 3306.
 
 ## Endpoints
 
+All endpoints (except login) require a JWT token in the `Authorization: Bearer <token>` header.
+
 ```
-POST   /students          Create a student
-GET    /students           Search students (?term=Garcia&status=active&limit=10&offset=0)
-GET    /students/{id}      Get student by ID
-PUT    /students/{id}      Update student
-DELETE /students/{id}      Soft delete student (sets status to inactive)
+Auth:
+  POST   /auth/login        Login (returns JWT token)
+  GET    /auth/me            Get authenticated user profile
+
+Students (admin + teacher can read, only admin can write):
+  POST   /students           Create student          [admin]
+  GET    /students            Search students          [any authenticated]
+  GET    /students/{id}       Get student by ID        [any authenticated]
+  PUT    /students/{id}       Update student           [admin]
+  DELETE /students/{id}       Soft delete student      [admin]
 ```
 
-## Request/Response Examples
+## Request/Response Format
 
-### Create Student
+All responses follow the same structure:
+
+```json
+{ "success": true, "data": { ... } }
+{ "success": false, "error": "Error message" }
+```
+
+### Login
+```bash
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@school.com","password":"password123"}'
+```
+
+### Create Student (requires admin token)
 ```bash
 curl -X POST http://localhost:3000/students \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "first_name": "Juan",
     "last_name_father": "Garcia",
@@ -42,46 +65,61 @@ curl -X POST http://localhost:3000/students \
     "gender": "M",
     "grade_id": 3
   }'
-# → { "success": true, "data": { "student_id": 11 } }
 ```
 
 ### Search Students
 ```bash
-curl "http://localhost:3000/students?term=Garcia&status=active"
-# → { "success": true, "data": [{ "id": 1, "first_name": "Juan Carlos", ... }] }
-```
-
-### Get Student
-```bash
-curl http://localhost:3000/students/1
-# → { "success": true, "data": { "id": 1, "first_name": "Juan Carlos", ... } }
+curl "http://localhost:3000/students?term=Garcia&status=active" \
+  -H "Authorization: Bearer <token>"
 ```
 
 ## Deploy to AWS
 
 ```bash
-make deploy
+make deploy       # Build and deploy API + Lambdas to AWS
+make db-deploy    # Run database migration on production RDS (via Lambda)
 ```
 
-First time it will ask for a stack name and S3 bucket. After that, `make deploy` handles everything.
+`make deploy` automatically reads VPC, subnets, and DB credentials from AWS. No manual configuration needed.
+
+## Database Migrations
+
+When you change the database structure (tables, stored procedures, seeds):
+
+1. Update the individual files in `school-db/` (migrations, stored-procedures, seeds)
+2. Update `src/handlers/db-migrate.js` to match the changes
+3. Run `make deploy` then `make db-deploy`
+
+The migration Lambda is idempotent (safe to run multiple times).
 
 ## Architecture
 
-Each CRUD operation is a separate Lambda function. They all share a MySQL connection pool (reused across warm invocations) and call stored procedures in school-db.
+```
+API Gateway → Lambda (VPC) → RDS MySQL (private subnet)
+                                ↑
+                        Stored Procedures
+```
 
-```
-API Gateway → Lambda → mysql2 → RDS (stored procedures)
-```
+Each CRUD operation is a separate Lambda function. They share a MySQL connection pool (reused across warm invocations) and call stored procedures defined in school-db.
 
 ## Available Commands
 
 ```
-make install        Install dependencies
-make dev            Start local API (port 3000)
-make build          Build SAM project
-make deploy         Build and deploy to AWS
-make invoke-create  Test create locally
-make invoke-get     Test get locally
-make invoke-search  Test search locally
-make logs           Tail CloudWatch logs
+Local:
+  make install        Install dependencies
+  make dev            Start API in background (port 3000)
+  make stop           Stop background API
+  make restart        Restart API
+  make status         Check if running
+  make logs           Last 50 lines
+  make logs-tail      Follow logs in real time
+
+Production:
+  make deploy         Build and deploy to AWS
+  make db-deploy      Run DB migration on production RDS
+  make destroy        Delete the CloudFormation stack
+
+Postman:
+  make postman        Generate local Postman collection
+  make postman-prod   Generate local + production collections
 ```

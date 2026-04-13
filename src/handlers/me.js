@@ -1,6 +1,6 @@
 import { callProcedure } from "../lib/db.js";
 import { withAuth } from "../lib/auth.js";
-import { success, serverError } from "../lib/response.js";
+import { success, notFound, serverError } from "../lib/response.js";
 
 async function meHandler(event) {
   try {
@@ -8,7 +8,7 @@ async function meHandler(event) {
     const rows = await callProcedure("sp_get_user_by_id", [user_id]);
 
     if (!rows.length) {
-      return success(null, 404);
+      return notFound("User not found");
     }
 
     return success(rows[0]);

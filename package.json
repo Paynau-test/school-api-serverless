@@ -4,12 +4,7 @@
   "description": "School API - Student CRUD + Auth (Node.js + Lambda + API Gateway)",
   "type": "module",
   "scripts": {
-    "dev": "sam local start-api --warm-containers eager",
-    "build": "sam build",
-    "deploy": "sam deploy --no-confirm-changeset",
-    "invoke:create": "sam local invoke CreateStudentFunction --event events/create-student.json",
-    "invoke:get": "sam local invoke GetStudentFunction --event events/get-student.json",
-    "invoke:search": "sam local invoke SearchStudentsFunction --event events/search-students.json"
+    "postman": "node scripts/generate-postman.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

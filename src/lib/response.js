@@ -2,6 +2,7 @@
  * Standard API Gateway response helpers.
  */
 
+// TODO: In production, restrict to specific frontend domain
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",

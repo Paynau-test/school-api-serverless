@@ -20,7 +20,6 @@ Parameters:
   DbHost:
     Type: String
     Default: "localhost"
-    Description: MySQL host (RDS endpoint in production)
   DbPort:
     Type: String
     Default: "3306"
@@ -38,9 +37,24 @@ Parameters:
     Type: String
     Default: "dev-secret-change-in-production"
     NoEcho: true
-    Description: Secret key for JWT signing
+  VpcId:
+    Type: String
+    Description: VPC ID for Lambda networking
+  SubnetIds:
+    Type: CommaDelimitedList
+    Description: Private subnet IDs (comma-separated)
 
 Resources:
+  # ── Lambda Security Group ───────────────────
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: School API Lambda functions
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: project
+          Value: school
+
   # ── API Gateway ─────────────────────────────
   SchoolApi:
     Type: AWS::Serverless::Api
@@ -59,6 +73,10 @@ Resources:
     Properties:
       FunctionName: school-login
       Handler: src/handlers/login.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -72,6 +90,10 @@ Resources:
     Properties:
       FunctionName: school-me
       Handler: src/handlers/me.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -87,6 +109,10 @@ Resources:
     Properties:
       FunctionName: school-create-student
       Handler: src/handlers/create-student.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -100,6 +126,10 @@ Resources:
     Properties:
       FunctionName: school-get-student
       Handler: src/handlers/get-student.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -113,6 +143,10 @@ Resources:
     Properties:
       FunctionName: school-search-students
       Handler: src/handlers/search-students.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -126,6 +160,10 @@ Resources:
     Properties:
       FunctionName: school-update-student
       Handler: src/handlers/update-student.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -139,6 +177,10 @@ Resources:
     Properties:
       FunctionName: school-delete-student
       Handler: src/handlers/delete-student.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
       Events:
         Api:
           Type: Api
@@ -146,6 +188,18 @@ Resources:
             RestApiId: !Ref SchoolApi
             Path: /students/{id}
             Method: DELETE
+
+  # ── Database Migration ────────────────────
+  DbMigrateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: school-db-migrate
+      Handler: src/handlers/db-migrate.handler
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt LambdaSecurityGroup.GroupId
+        SubnetIds: !Ref SubnetIds
 
 Outputs:
   ApiUrl:

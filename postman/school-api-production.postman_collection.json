@@ -1,14 +1,14 @@
 {
   "info": {
-    "name": "School API",
-    "_postman_id": "school-api-v2",
-    "description": "Auto-generated from template.yaml.\nRun: make postman\n\nFlow: 1) Login → 2) Copy token → 3) Use protected endpoints.\nSwitch base_url variable between local and AWS.",
+    "name": "School API - Production",
+    "_postman_id": "school-api-production",
+    "description": "Auto-generated from template.yaml.\nEnvironment: Production\nBase URL: https://z3auyyxj3g.execute-api.us-east-1.amazonaws.com/dev\n\nFlow: 1) Login → 2) Token auto-saved → 3) Use protected endpoints.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:3000",
+      "value": "https://z3auyyxj3g.execute-api.us-east-1.amazonaws.com/dev",
       "type": "string"
     },
     {
@@ -17,21 +17,9 @@
       "type": "string"
     }
   ],
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
-    }
-  ],
   "item": [
     {
       "name": "Auth",
-      "description": "Login and profile endpoints. Login first to get a JWT token.",
       "item": [
         {
           "name": "Login",
@@ -101,7 +89,6 @@
     },
     {
       "name": "Students",
-      "description": "Student CRUD endpoints. All require Bearer token (login first).",
       "item": [
         {
           "name": "Create Student",

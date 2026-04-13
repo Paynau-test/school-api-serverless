@@ -92,7 +92,17 @@ build:
 
 deploy:
 	@sam build
-	@sam deploy --no-confirm-changeset
+	@sam deploy --stack-name school-api-node \
+		--region us-east-1 \
+		--capabilities CAPABILITY_IAM \
+		--resolve-s3 \
+		--no-confirm-changeset \
+		--tags project=school environment=dev owner=isaac
+
+destroy:
+	@echo "Destroying school-api-node stack..."
+	@sam delete --stack-name school-api-node --no-prompts
+	@echo "Done."
 
 # ── Test locally with events ────────────────
 
@@ -121,17 +131,12 @@ postman-prod:
 	@echo "Reading API URL from deployed stack..."
 	@API_URL=$$(aws cloudformation describe-stacks \
 		--stack-name school-api-node \
+		--region us-east-1 \
 		--query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
 		--output text 2>/dev/null) && \
 	if [ -n "$$API_URL" ] && [ "$$API_URL" != "None" ]; then \
-		node scripts/generate-postman.js && \
-		node -e " \
-			const fs = require('fs'); \
-			const env = JSON.parse(fs.readFileSync('postman/production.postman_environment.json')); \
-			env.values.find(v => v.key === 'base_url').value = '$$API_URL'; \
-			fs.writeFileSync('postman/production.postman_environment.json', JSON.stringify(env, null, 2)); \
-			console.log('Production URL set to: $$API_URL'); \
-		"; \
+		PROD_URL="$$API_URL" node scripts/generate-postman.js; \
+		echo "Production URL: $$API_URL"; \
 	else \
 		echo "Stack not deployed yet. Run: make deploy"; \
 	fi

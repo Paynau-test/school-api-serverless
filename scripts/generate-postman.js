@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 /**
- * Reads template.yaml and generates/updates the Postman collection.
+ * Reads template.yaml and generates Postman collections.
+ * Generates two collections: Local and Production.
  * Run: node scripts/generate-postman.js
  * Or:  make postman
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 
-// Simple YAML parser for SAM template (just extracts API events)
+// ── Parse template.yaml ───────────────────
+
 const template = readFileSync("template.yaml", "utf8");
 
-// Extract all API events: Path + Method + FunctionName
 const functionRegex =
   /FunctionName:\s*(\S+)[\s\S]*?Path:\s*(\S+)\s*\n\s*Method:\s*(\S+)/g;
 const endpoints = [];
@@ -24,22 +25,19 @@ while ((match = functionRegex.exec(template)) !== null) {
   });
 }
 
-// Separate auth and student endpoints
 const authEndpoints = endpoints.filter((ep) => ep.path.startsWith("/auth"));
 const studentEndpoints = endpoints.filter((ep) =>
   ep.path.startsWith("/students")
 );
 
-// Generate request body examples based on method and path
+// ── Helpers ───────────────────────────────
+
 function getBody(method, path) {
   if (method === "POST" && path.includes("/auth/login")) {
     return {
       mode: "raw",
       raw: JSON.stringify(
-        {
-          email: "admin@school.com",
-          password: "password123",
-        },
+        { email: "admin@school.com", password: "password123" },
         null,
         2
       ),
@@ -83,16 +81,11 @@ function getBody(method, path) {
   return undefined;
 }
 
-// Generate query params for GET list endpoints
 function getQuery(method, path) {
   if (method === "GET" && !path.includes("{") && path.includes("students")) {
     return [
       { key: "term", value: "", description: "Partial name search" },
-      {
-        key: "status",
-        value: "active",
-        description: "Filter: active, inactive, suspended",
-      },
+      { key: "status", value: "active", description: "Filter: active, inactive, suspended" },
       { key: "limit", value: "20" },
       { key: "offset", value: "0" },
     ];
@@ -100,7 +93,6 @@ function getQuery(method, path) {
   return undefined;
 }
 
-// Build readable name from function name
 function readableName(fnName) {
   return fnName
     .replace("school-", "")
@@ -109,18 +101,11 @@ function readableName(fnName) {
     .join(" ");
 }
 
-// Auth header for protected endpoints
-function authHeader() {
-  return { key: "Authorization", value: "Bearer {{token}}", type: "text" };
-}
-
-// Is this a public endpoint (no auth needed)?
 function isPublic(path) {
   return path === "/auth/login";
 }
 
-// Build request object
-function buildRequest(ep) {
+function buildRequest(ep, baseUrl) {
   const resolvedPath = ep.path.replace("{id}", "1");
   const headers = [];
 
@@ -128,7 +113,7 @@ function buildRequest(ep) {
     headers.push({ key: "Content-Type", value: "application/json" });
   }
   if (!isPublic(ep.path)) {
-    headers.push(authHeader());
+    headers.push({ key: "Authorization", value: "Bearer {{token}}", type: "text" });
   }
 
   const request = {
@@ -150,115 +135,83 @@ function buildRequest(ep) {
   return request;
 }
 
-// Build Postman collection
-const collection = {
-  info: {
-    name: "School API",
-    _postman_id: "school-api-v2",
-    description:
-      "Auto-generated from template.yaml.\nRun: make postman\n\nFlow: 1) Login → 2) Copy token → 3) Use protected endpoints.\nSwitch base_url variable between local and AWS.",
-    schema:
-      "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-  },
-  variable: [
-    { key: "base_url", value: "http://localhost:3000", type: "string" },
-    { key: "token", value: "", type: "string" },
-  ],
-  event: [
+function loginTestScript() {
+  return [
     {
-      listen: "prerequest",
+      listen: "test",
       script: {
         type: "text/javascript",
-        exec: [""],
+        exec: [
+          'const res = pm.response.json();',
+          'if (res.success && res.data && res.data.token) {',
+          '    pm.collectionVariables.set("token", res.data.token);',
+          '    console.log("Token saved to collection variable");',
+          '}',
+        ],
       },
     },
-  ],
-  item: [
-    {
-      name: "Auth",
-      description: "Login and profile endpoints. Login first to get a JWT token.",
-      item: authEndpoints.map((ep) => {
-        const item = { name: readableName(ep.name), request: buildRequest(ep) };
-        // Auto-set token variable after login
-        if (ep.path === "/auth/login" && ep.method === "POST") {
-          item.event = [
-            {
-              listen: "test",
-              script: {
-                type: "text/javascript",
-                exec: [
-                  'const res = pm.response.json();',
-                  'if (res.success && res.data && res.data.token) {',
-                  '    pm.collectionVariables.set("token", res.data.token);',
-                  '    console.log("Token saved to collection variable");',
-                  '}',
-                ],
-              },
-            },
-          ];
-        }
-        return item;
-      }),
-    },
-    {
-      name: "Students",
-      description:
-        "Student CRUD endpoints. All require Bearer token (login first).",
-      item: studentEndpoints.map((ep) => ({
-        name: readableName(ep.name),
-        request: buildRequest(ep),
-      })),
-    },
-  ],
-};
-
-// ── Postman Environments ──────────────────
-
-const localEnv = {
-  id: "school-api-local",
-  name: "School API - Local",
-  values: [
-    { key: "base_url", value: "http://localhost:3000", enabled: true },
-    { key: "token", value: "", enabled: true },
-  ],
-};
-
-// Try to read the production URL from SAM outputs
-let prodUrl = "https://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/dev";
-try {
-  const samConfig = readFileSync("samconfig.toml", "utf8");
-  // After first deploy, try to get the stack name to hint the user
-} catch {
-  // No deploy yet, use placeholder
+  ];
 }
 
-const prodEnv = {
-  id: "school-api-production",
-  name: "School API - Production (AWS)",
-  values: [
-    { key: "base_url", value: prodUrl, enabled: true },
-    { key: "token", value: "", enabled: true },
-  ],
-};
+// ── Build collection for a given environment ──
 
-// ── Write files ───────────────────────────
+function buildCollection(envName, baseUrl, postmanId) {
+  return {
+    info: {
+      name: `School API - ${envName}`,
+      _postman_id: postmanId,
+      description: `Auto-generated from template.yaml.\nEnvironment: ${envName}\nBase URL: ${baseUrl}\n\nFlow: 1) Login → 2) Token auto-saved → 3) Use protected endpoints.`,
+      schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    },
+    variable: [
+      { key: "base_url", value: baseUrl, type: "string" },
+      { key: "token", value: "", type: "string" },
+    ],
+    item: [
+      {
+        name: "Auth",
+        item: authEndpoints.map((ep) => {
+          const item = { name: readableName(ep.name), request: buildRequest(ep, baseUrl) };
+          if (ep.path === "/auth/login" && ep.method === "POST") {
+            item.event = loginTestScript();
+          }
+          return item;
+        }),
+      },
+      {
+        name: "Students",
+        item: studentEndpoints.map((ep) => ({
+          name: readableName(ep.name),
+          request: buildRequest(ep, baseUrl),
+        })),
+      },
+    ],
+  };
+}
+
+// ── Read production URL if available ──────
+
+let prodUrl = "https://DEPLOY_FIRST.execute-api.us-east-1.amazonaws.com/dev";
+const prodUrlEnv = process.env.PROD_URL;
+if (prodUrlEnv) {
+  prodUrl = prodUrlEnv;
+}
+
+// ── Generate files ────────────────────────
 
 mkdirSync("postman", { recursive: true });
+
+const localCollection = buildCollection("Local", "http://localhost:3000", "school-api-local");
+const prodCollection = buildCollection("Production", prodUrl, "school-api-production");
+
 writeFileSync(
-  "postman/school-api.postman_collection.json",
-  JSON.stringify(collection, null, 2)
+  "postman/school-api-local.postman_collection.json",
+  JSON.stringify(localCollection, null, 2)
 );
 writeFileSync(
-  "postman/local.postman_environment.json",
-  JSON.stringify(localEnv, null, 2)
-);
-writeFileSync(
-  "postman/production.postman_environment.json",
-  JSON.stringify(prodEnv, null, 2)
+  "postman/school-api-production.postman_collection.json",
+  JSON.stringify(prodCollection, null, 2)
 );
 
-console.log(
-  `Generated postman/school-api.postman_collection.json (${endpoints.length} endpoints)`
-);
-console.log("Generated postman/local.postman_environment.json");
-console.log("Generated postman/production.postman_environment.json");
+console.log(`Generated postman/school-api-local.postman_collection.json (${endpoints.length} endpoints)`);
+console.log(`Generated postman/school-api-production.postman_collection.json (${endpoints.length} endpoints)`);

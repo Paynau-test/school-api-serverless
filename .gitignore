@@ -4,3 +4,4 @@ samconfig.toml
 .env
 .api.log
 .api.pid
+postman/postman/

@@ -2,7 +2,7 @@
 # school-api-serverless · Makefile
 # ============================================
 
-.PHONY: install dev build deploy invoke-create invoke-get invoke-search logs help
+.PHONY: install dev build deploy invoke-create invoke-get invoke-search logs postman help
 
 # ── Setup ───────────────────────────────────
 
@@ -43,6 +43,11 @@ invoke-search:
 	@sam local invoke SearchStudentsFunction --event events/search-students.json \
 		--parameter-overrides DbHost=host.docker.internal
 
+# ── Postman ─────────────────────────────────
+
+postman:
+	@node scripts/generate-postman.js
+
 # ── Logs ────────────────────────────────────
 
 logs:
@@ -61,5 +66,6 @@ help:
 	@echo "  make invoke-create  Test create-student locally"
 	@echo "  make invoke-get     Test get-student locally"
 	@echo "  make invoke-search  Test search-students locally"
+	@echo "  make postman        Regenerate Postman collection from template.yaml"
 	@echo "  make logs           Tail CloudWatch logs"
 	@echo ""
